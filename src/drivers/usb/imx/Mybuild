@@ -1,0 +1,6 @@
+package embox.driver.usb
+
+module imx {
+	option number log_level = 4
+	source "imx.c"
+}
