@@ -8,6 +8,7 @@
 
 #include <errno.h>
 
+#include <drivers/clk/ccm_imx6.h>
 #include <drivers/common/memory.h>
 #include <drivers/usb/usb.h>
 #include <embox/unit.h>
@@ -131,6 +132,7 @@ static int imx_usb_init(void) {
 	imx_usb_regdump();
 
 	/* Enable clocks */
+	clk_enable("usboh3");
 
 	/* Setup IOMUX */
 

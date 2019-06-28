@@ -5,4 +5,5 @@ module imx {
 	source "imx.c"
 
 	depends embox.driver.usb.core
+	depends embox.driver.clk.ccm_imx6
 }
