@@ -25,4 +25,10 @@
 #define USB_UOG_HWTXBUF      (IMX_USB_CORE_BASE + 0x010)
 #define USB_UOG_HWRXBUF      (IMX_USB_CORE_BASE + 0x014)
 
+#define USB_UOG_USBCMD       (IMX_USB_CORE_BASE + 0x140)
+# define USB_USBCMD_RS       (1 << 0)
+# define USB_USBCMD_RST      (1 << 1)
+#define USB_UOG_USBSTS       (IMX_USB_CORE_BASE + 0x144)
+#define USB_UOG_USBINTR      (IMX_USB_CORE_BASE + 0x148)
+
 #endif /* IMX_USB_REGS_H_ */
