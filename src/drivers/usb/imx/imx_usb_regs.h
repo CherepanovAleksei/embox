@@ -31,4 +31,36 @@
 #define USB_UOG_USBSTS       (IMX_USB_CORE_BASE + 0x144)
 #define USB_UOG_USBINTR      (IMX_USB_CORE_BASE + 0x148)
 
+#define QTD_TERMINATE     0x1
+#define QTD_POINTER_MASK ~0x1F
+#define QTD_TOKEN_TOOGLE (1 << 31)
+#define QTD_TOKEN_BYTES_OFFT   16
+#define QTD_TOKEN_BYTES_MASK   0x7FFF
+#define QTD_TOKEN_IOC          (1 << 15)
+#define QTD_TOKEN_CPAGE_OFFT   12
+#define QTD_TOKEN_CPAGE_MASK   0x1F
+
+#define QTD_TOKEN_PID_OFFT   8
+#define QTD_TOKEN_PID_MASK   0x3
+#define QTD_TOKEN_STATUS_MASK   0xFF
+
+#define QTD_BUFFER_CURRENT_OFFT(x) (x &  0xFFF)
+#define QTD_BUFFER_POINTER(x)      (x & ~0xFFF)
+/* Data structures as decribed in iMX6DQPRM.pdf */
+struct qtd {
+	uint32_t next;
+	uint32_t altnext;
+	uint32_t token;
+	uint32_t buffer[5];
+};
+
+struct queue_head {
+	uint32_t link;
+	uint32_t endpt1;
+	uint32_t endpt2;
+	uint32_t curtd;
+	struct qtd qtd;
+	uint32_t buffer;
+};
+
 #endif /* IMX_USB_REGS_H_ */

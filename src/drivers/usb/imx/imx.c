@@ -131,10 +131,15 @@ static int imx_usb_init(void) {
 
 	imx_usb_regdump();
 
-	/* Enable clocks */
 	clk_enable("usboh3");
 
 	/* Setup IOMUX */
+
+	/* Power config */
+
+	/* USB phy config as host */
+
+	/* Configure GPIO pins */
 
 	ehci_reset();
 
