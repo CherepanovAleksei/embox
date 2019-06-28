@@ -19,6 +19,8 @@
 
 EMBOX_UNIT_INIT(imx_usb_init);
 
+#define USB_PORT 0
+
 #if 0
 static struct ehci_state {
 	struct queue_head qh_list[128];
@@ -67,6 +69,15 @@ void itd_maxpacketsz_set(struct itd *i, int val) {
 	i->buf[1] |= val;
 }
 
+static void imx_usb_powerup(int port) {
+	REG32_STORE(USBPHY_CTRL_SET(port), USBPHY_CTRL_CLKGATE);
+
+	REG32_STORE(USB_ANALOG_CHRG_DETECT(port),
+			USB_ANALOG_EN_B | USB_ANALOG_CHK_CHRG_B);
+
+	ccm_analog_usb_init(port);
+}
+
 static void ehci_reset(void) {
 	uint32_t cmd = REG32_LOAD(USB_UOG_USBCMD);
 
@@ -104,7 +115,6 @@ static int ehci_start(struct usb_hcd *hcd) {
 	uint32_t cmd = REG32_LOAD(USB_UOG_USBCMD);
 
 	log_debug("Put USB controller in running mode");
-
 
 	REG32_STORE(USB_UOG_USBCMD, cmd);
 
@@ -165,7 +175,7 @@ static int imx_usb_init(void) {
 
 	/* Setup IOMUX */
 
-	/* Power config */
+	imx_usb_powerup(USB_PORT);
 
 	/* USB phy config as host */
 
