@@ -19,6 +19,12 @@
 
 EMBOX_UNIT_INIT(imx_usb_init);
 
+#if 0
+static struct ehci_state {
+	struct queue_head qh_list[128];
+} echi_state;
+#endif
+
 /* Isochronous Transaction Descriptor */
 struct itd {
 	uint32_t trn[8];
@@ -84,9 +90,26 @@ static void imx_usb_regdump(void) {
 	log_debug("USB_UOG_USBCMD     %08x", REG32_LOAD(USB_UOG_USBCMD));
 	log_debug("USB_UOG_USBSTS     %08x", REG32_LOAD(USB_UOG_USBSTS));
 	log_debug("USB_UOG_USBINTR    %08x", REG32_LOAD(USB_UOG_USBINTR));
+	log_debug("========= PHY REGISTERS =========");
+	for (int i = 0; i < 2; i++) {
+		log_debug("USBPHY%d_PWD     %08x", i + 1, REG32_LOAD(USBPHY_PWD(i)));
+		log_debug("USBPHY%d_TX      %08x", i + 1, REG32_LOAD(USBPHY_TX(i)));
+		log_debug("USBPHY%d_RX      %08x", i + 1, REG32_LOAD(USBPHY_RX(i)));
+		log_debug("USBPHY%d_CTRL    %08x", i + 1, REG32_LOAD(USBPHY_CTRL(i)));
+		log_debug("USBPHY%d_STATUS  %08x", i + 1, REG32_LOAD(USBPHY_STATUS(i)));
+	}
 }
 
 static int ehci_start(struct usb_hcd *hcd) {
+	uint32_t cmd = REG32_LOAD(USB_UOG_USBCMD);
+
+	log_debug("Put USB controller in running mode");
+
+
+	REG32_STORE(USB_UOG_USBCMD, cmd);
+
+	while (REG32_LOAD(USB_UOG_USBCMD) & USB_USBCMD_RST);
+
 	return 0;
 }
 
@@ -121,12 +144,19 @@ static struct usb_hcd_ops ehci_hcd_ops = {
 static int imx_usb_init(void) {
 	struct usb_hcd *hcd;
 	uint32_t uog_id = REG32_LOAD(USB_UOG_ID);
+	uint32_t phy_version = REG32_LOAD(USBPHY_VERSION(0));
+	uint32_t digprog = REG32_LOAD(USB_ANALOG_DIGPROG);
 
 	log_boot_start();
-	log_boot("USB 2.0 tigh-Speed code REV 0x%02x NID 0x%02x ID 0x%02x\n",
+	log_boot("USB 2.0 high-Speed code rev 0x%02x NID 0x%02x ID 0x%02x\n",
 		(uog_id >> USB_UOG_ID_REV_OFFT) & USB_UOG_ID_REV_MASK,
 		(uog_id >> USB_UOG_ID_NID_OFFT) & USB_UOG_ID_NID_MASK,
 		(uog_id >> USB_UOG_ID_ID_OFFT) & USB_UOG_ID_ID_MASK);
+	log_boot("USB PHY %d.%d\n",
+			phy_version >> 24,
+			((phy_version) >> 16) & 0xFF);
+	log_boot("USB analog rev x.%d\n", digprog & 0xFF);
+
 	log_boot_stop();
 
 	imx_usb_regdump();
@@ -142,6 +172,10 @@ static int imx_usb_init(void) {
 	/* Configure GPIO pins */
 
 	ehci_reset();
+
+	/* Init qh list */
+
+	/* Init periodic list */
 
 	imx_usb_regdump();
 	/* Write '11' to USBMODE */
@@ -162,3 +196,10 @@ static struct periph_memory_desc imx_usb_mem = {
 };
 
 PERIPH_MEMORY_DEFINE(imx_usb_mem);
+
+static struct periph_memory_desc imx_usb_phy_mem = {
+	.start = USBPHY_BASE(0),
+	.len   = 0x2000,
+};
+
+PERIPH_MEMORY_DEFINE(imx_usb_phy_mem);
