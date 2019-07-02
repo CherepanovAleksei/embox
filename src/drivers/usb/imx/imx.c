@@ -14,7 +14,7 @@
 #include <embox/unit.h>
 #include <hal/reg.h>
 #include <util/log.h>
-
+#include <kernel/printk.h>
 #include "imx_usb_regs.h"
 
 EMBOX_UNIT_INIT(imx_usb_init);
@@ -67,6 +67,45 @@ int itd_maxpacketsz_get(struct itd *i) {
 void itd_maxpacketsz_set(struct itd *i, int val) {
 	i->buf[1] = i->buf[1] & ~(0x7FF);
 	i->buf[1] |= val;
+}
+
+static void imx_usb_phy_enable(int port) {
+	int tmp;
+
+	printk("trace %s:%d\n", __func__, __LINE__);
+	/* Stop then Reset */
+	REG32_CLEAR(USB_UOG_USBCMD, USB_USBCMD_RS);
+	printk("trace %s:%d\n", __func__, __LINE__);
+	while ((REG32_LOAD(USB_UOG_USBCMD) & USB_USBCMD_RS)) {
+	printk("%08x\n", REG32_LOAD(USB_UOG_USBCMD));
+	}
+	printk("trace %s:%d\n", __func__, __LINE__);
+
+	REG32_ORIN(USB_UOG_USBCMD, USB_USBCMD_RST);
+	printk("trace %s:%d\n", __func__, __LINE__);
+	while (REG32_LOAD(USB_UOG_USBCMD) & USB_USBCMD_RST) {
+	}
+	printk("trace %s:%d\n", __func__, __LINE__);
+
+	REG32_STORE(USBPHY_CTRL_SET(port), USBPHY_CTRL_SFTRST);
+	printk("trace %s:%d\n", __func__, __LINE__);
+	tmp = 0xffff;
+	while(tmp--);
+	printk("trace %s:%d\n", __func__, __LINE__);
+
+	REG32_STORE(USBPHY_CTRL_CLR(port),
+			USBPHY_CTRL_SFTRST | USBPHY_CTRL_CLKGATE);
+
+	printk("trace %s:%d\n", __func__, __LINE__);
+	REG32_STORE(USBPHY_PWD(port), 0);
+
+	printk("trace %s:%d\n", __func__, __LINE__);
+	/* enable FS/LS device */
+
+	REG32_STORE(USBPHY_CTRL_SET(port),
+			USBPHY_CTRL_ENUTMILEVEL2 | USBPHY_CTRL_ENUTMILEVEL3);
+
+	printk("trace %s:%d\n", __func__, __LINE__);
 }
 
 static void imx_usb_powerup(int port) {
@@ -126,9 +165,10 @@ static int ehci_start(struct usb_hcd *hcd) {
 static int ehci_stop(struct usb_hcd *hcd) {
 	return 0;
 }
-static void *ehci_hcd_alloc(struct usb_hcd *hcd, void *arg) {
-	return NULL;
-}
+
+//static void *ehci_hcd_alloc(struct usb_hcd *hcd, void *arg) {
+//	return NULL;
+//}
 
 static void ehci_hcd_free(struct usb_hcd *hcd, void *hci) {
 }
@@ -145,7 +185,7 @@ static int ehci_request(struct usb_request *req) {
 static struct usb_hcd_ops ehci_hcd_ops = {
 	.hcd_start     = ehci_start,
 	.hcd_stop      = ehci_stop,
-	.hcd_hci_alloc = ehci_hcd_alloc,
+	//.hcd_hci_alloc = ehci_hcd_alloc,
 	.hcd_hci_free  = ehci_hcd_free,
 	.rhub_ctrl     = ehci_rh_ctrl,
 	.request       = ehci_request,
@@ -172,6 +212,8 @@ static int imx_usb_init(void) {
 	imx_usb_regdump();
 
 	clk_enable("usboh3");
+
+	imx_usb_phy_enable(USB_PORT);
 
 	/* Setup IOMUX */
 
