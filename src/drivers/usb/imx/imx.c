@@ -13,13 +13,21 @@
 #include <drivers/usb/usb.h>
 #include <embox/unit.h>
 #include <hal/reg.h>
-#include <util/log.h>
+#include <kernel/irq.h>
 #include <kernel/printk.h>
+#include <util/log.h>
+
 #include "imx_usb_regs.h"
 
 EMBOX_UNIT_INIT(imx_usb_init);
 
 #define USB_PORT 0
+#define IMX6_USB0_IRQ       72
+#define IMX6_USB1_IRQ       73
+#define IMX6_USB2_IRQ       74
+#define IMX6_USB_OTG_IRQ    75
+#define IMX6_USB_PHY_UTMI0  76
+#define IMX6_USB_PHY_UTMI1  77
 
 #if 0
 static struct ehci_state {
@@ -150,10 +158,47 @@ static void imx_usb_regdump(void) {
 	}
 }
 
+static irq_return_t imx6_irq(unsigned int irq_nr, void *data) {
+	log_debug("IRQ%d enter", irq_nr);
+
+	return IRQ_HANDLED;
+}
+
 static int ehci_start(struct usb_hcd *hcd) {
 	uint32_t cmd = REG32_LOAD(USB_UOG_USBCMD);
+	int ret;
 
 	log_debug("Put USB controller in running mode");
+
+	ret = irq_attach(IMX6_USB0_IRQ, imx6_irq, 0, NULL, "i.MX6 USB PORT0");
+	if (0 != ret) {
+		return ret;
+	}
+
+	ret = irq_attach(IMX6_USB1_IRQ, imx6_irq, 0, NULL, "i.MX6 USB PORT1");
+	if (0 != ret) {
+		return ret;
+	}
+
+	ret = irq_attach(IMX6_USB2_IRQ, imx6_irq, 0, NULL, "i.MX6 USB PORT2");
+	if (0 != ret) {
+		return ret;
+	}
+
+	ret = irq_attach(IMX6_USB_OTG_IRQ, imx6_irq, 0, NULL, "i.MX6 USB OTG");
+	if (0 != ret) {
+		return ret;
+	}
+
+	ret = irq_attach(IMX6_USB_PHY_UTMI0, imx6_irq, 0, NULL, "i.MX6 USB PHY UTMI0");
+	if (0 != ret) {
+		return ret;
+	}
+
+	ret = irq_attach(IMX6_USB_PHY_UTMI1, imx6_irq, 0, NULL, "i.MX6 USB PHY UTMI1");
+	if (0 != ret) {
+		return ret;
+	}
 
 	REG32_STORE(USB_UOG_USBCMD, cmd);
 
@@ -235,6 +280,7 @@ static int imx_usb_init(void) {
 	/* Make sure all structures don't cross 4kb-border! */
 
 	hcd = usb_hcd_alloc(&ehci_hcd_ops, (void *) 0);
+	hcd->root_hub = usb_hub_alloc(hcd, 1);
 	if (!hcd) {
 		return -ENOMEM;
 	}
