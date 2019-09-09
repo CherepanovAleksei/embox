@@ -279,7 +279,7 @@ static int imx_usb_init(void) {
 
 	/* Make sure all structures don't cross 4kb-border! */
 
-	hcd = usb_hcd_alloc(&ehci_hcd_ops, (void *) 0);
+	hcd = usb_hcd_alloc(&ehci_hcd_ops, (void *) USB_UOG_USBCMD);
 	hcd->root_hub = usb_hub_alloc(hcd, 1);
 	if (!hcd) {
 		return -ENOMEM;
@@ -288,16 +288,5 @@ static int imx_usb_init(void) {
 	return usb_hcd_register(hcd);
 }
 
-static struct periph_memory_desc imx_usb_mem = {
-	.start = IMX_USB_CORE_BASE,
-	.len   = 0x7B0,
-};
-
-PERIPH_MEMORY_DEFINE(imx_usb_mem);
-
-static struct periph_memory_desc imx_usb_phy_mem = {
-	.start = USBPHY_BASE(0),
-	.len   = 0x2000,
-};
-
-PERIPH_MEMORY_DEFINE(imx_usb_phy_mem);
+PERIPH_MEMORY_DEFINE(imx_usb, IMX_USB_CORE_BASE, 0x7B0);
+PERIPH_MEMORY_DEFINE(imx_usb_phy, USBPHY_BASE(0), 0x2000);
