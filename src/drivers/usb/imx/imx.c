@@ -17,6 +17,8 @@
 #include <kernel/printk.h>
 #include <util/log.h>
 
+#include "../hc/ehci.h"
+
 #include "imx_usb_regs.h"
 
 EMBOX_UNIT_INIT(imx_usb_init);
@@ -164,6 +166,7 @@ static irq_return_t imx6_irq(unsigned int irq_nr, void *data) {
 	return IRQ_HANDLED;
 }
 
+#if 0
 static int ehci_start(struct usb_hcd *hcd) {
 	uint32_t cmd = REG32_LOAD(USB_UOG_USBCMD);
 	int ret;
@@ -226,7 +229,8 @@ static int ehci_rh_ctrl(struct usb_hub_port *port, enum usb_hub_request req,
 static int ehci_request(struct usb_request *req) {
 	return 0;
 }
-
+#endif
+/*
 static struct usb_hcd_ops ehci_hcd_ops = {
 	.hcd_start     = ehci_start,
 	.hcd_stop      = ehci_stop,
@@ -235,9 +239,10 @@ static struct usb_hcd_ops ehci_hcd_ops = {
 	.rhub_ctrl     = ehci_rh_ctrl,
 	.request       = ehci_request,
 };
+*/
 
 static int imx_usb_init(void) {
-	struct usb_hcd *hcd;
+	//struct usb_hcd *hcd;
 	uint32_t uog_id = REG32_LOAD(USB_UOG_ID);
 	uint32_t phy_version = REG32_LOAD(USBPHY_VERSION(0));
 	uint32_t digprog = REG32_LOAD(USB_ANALOG_DIGPROG);
@@ -277,8 +282,46 @@ static int imx_usb_init(void) {
 	imx_usb_regdump();
 	/* Write '11' to USBMODE */
 
+	int ret;
+	ret = irq_attach(IMX6_USB0_IRQ, imx6_irq, 0, NULL, "i.MX6 USB PORT0");
+	if (0 != ret) {
+		return ret;
+	}
+
+	ret = irq_attach(IMX6_USB1_IRQ, imx6_irq, 0, NULL, "i.MX6 USB PORT1");
+	if (0 != ret) {
+		return ret;
+	}
+
+	ret = irq_attach(IMX6_USB2_IRQ, imx6_irq, 0, NULL, "i.MX6 USB PORT2");
+	if (0 != ret) {
+		return ret;
+	}
+
+	ret = irq_attach(IMX6_USB_OTG_IRQ, imx6_irq, 0, NULL, "i.MX6 USB OTG");
+	if (0 != ret) {
+		return ret;
+	}
+
+	ret = irq_attach(IMX6_USB_PHY_UTMI0, imx6_irq, 0, NULL, "i.MX6 USB PHY UTMI0");
+	if (0 != ret) {
+		return ret;
+	}
+
+	ret = irq_attach(IMX6_USB_PHY_UTMI1, imx6_irq, 0, NULL, "i.MX6 USB PHY UTMI1");
+	if (0 != ret) {
+		return ret;
+	}
+
+	uint32_t cmd = REG32_LOAD(USB_UOG_USBCMD);
+	REG32_STORE(USB_UOG_USBCMD, cmd);
+
+	while (REG32_LOAD(USB_UOG_USBCMD) & USB_USBCMD_RST);
+
 	/* Make sure all structures don't cross 4kb-border! */
-	return ehci_hcd_register((void *) USB_UOG_USBCMD, IMX_USB_IRQ);
+	return ehci_hcd_register((void *) (IMX_USB_CORE_BASE + 0x100) + 0x00, 75);
+
+	//ehci_start(NULL);
 }
 
 PERIPH_MEMORY_DEFINE(imx_usb, IMX_USB_CORE_BASE, 0x7B0);
