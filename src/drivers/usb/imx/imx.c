@@ -278,14 +278,7 @@ static int imx_usb_init(void) {
 	/* Write '11' to USBMODE */
 
 	/* Make sure all structures don't cross 4kb-border! */
-
-	hcd = usb_hcd_alloc(&ehci_hcd_ops, (void *) USB_UOG_USBCMD);
-	hcd->root_hub = usb_hub_alloc(hcd, 1);
-	if (!hcd) {
-		return -ENOMEM;
-	}
-
-	return usb_hcd_register(hcd);
+	return ehci_hcd_register((void *) USB_UOG_USBCMD, IMX_USB_IRQ);
 }
 
 PERIPH_MEMORY_DEFINE(imx_usb, IMX_USB_CORE_BASE, 0x7B0);
