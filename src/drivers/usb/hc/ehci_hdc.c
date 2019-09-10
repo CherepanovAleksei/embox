@@ -38,6 +38,7 @@ static int ehci_handshake(struct ehci_hcd *ehci,
 	assert(ehci);
 
 	do {
+		log_debug("tick");
 		result = ehci_read(ehci, ptr);
 		if (result == ~(uint32_t)0) {/* card removed */
 			return -ENODEV;
@@ -105,6 +106,7 @@ static int ehci_reset(struct ehci_hcd *ehci) {
 	command |= EHCI_CMD_RESET;
 	log_debug("command reset %x", command);
 	ehci_write(ehci, command, &ehci->ehci_regs->command);
+	log_debug("command reset %x", command);
 	retval = ehci_handshake(ehci, &ehci->ehci_regs->command,
 			EHCI_CMD_RESET, 0, 250 * 10);
 
