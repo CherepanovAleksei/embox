@@ -23,6 +23,8 @@
 
 EMBOX_UNIT_INIT(imx_usb_init);
 
+#define IMX_USB_CORE_BASE OPTION_GET(NUMBER, base_addr)
+
 #define USB_PORT 0
 #define IMX6_USB0_IRQ       72
 #define IMX6_USB1_IRQ       73
@@ -31,53 +33,6 @@ EMBOX_UNIT_INIT(imx_usb_init);
 #define IMX6_USB_PHY_UTMI0  76
 #define IMX6_USB_PHY_UTMI1  77
 
-#if 0
-static struct ehci_state {
-	struct queue_head qh_list[128];
-} echi_state;
-#endif
-
-/* Isochronous Transaction Descriptor */
-struct itd {
-	uint32_t trn[8];
-	uint32_t buf[7];
-};
-
-int itd_endpt_get(struct itd *i) {
-	return (i->buf[0] >> 8) & 0xF;
-}
-
-void itd_endpt_set(struct itd *i, int val) {
-	i->buf[0] = i->buf[0] & ~(0xF << 8);
-	i->buf[0] |= val << 8;
-}
-
-int itd_devaddr_get(struct itd *i) {
-	return (i->buf[0] >> 0) & 0x3F;
-}
-
-void itd_devaddr_set(struct itd *i, int val) {
-	i->buf[0] = i->buf[0] & ~(0x3F << 0);
-	i->buf[0] |= val;
-}
-
-int itd_dir_get(struct itd *i) {
-	return (i->buf[1] >> 11) & 0x1;
-}
-
-void itd_dir_set(struct itd *i, int val) {
-	i->buf[1] = i->buf[1] & ~(1 << 11);
-	i->buf[1] |= val << 11;
-}
-
-int itd_maxpacketsz_get(struct itd *i) {
-	return (i->buf[1] >> 0) & 0x7FF;
-}
-
-void itd_maxpacketsz_set(struct itd *i, int val) {
-	i->buf[1] = i->buf[1] & ~(0x7FF);
-	i->buf[1] |= val;
-}
 
 static void imx_usb_phy_enable(int port) {
 	int tmp;

@@ -43,6 +43,9 @@ module usb_dwc {
 
 module ehci_mxc {
 	option number log_level = 4
+
+	option number base_addr = 0x02184000
+
 	source "ehci_mxc.c"
 
 	depends embox.driver.usb.core

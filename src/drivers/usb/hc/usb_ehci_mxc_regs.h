@@ -9,9 +9,7 @@
 #ifndef IMX_USB_REGS_H_
 #define IMX_USB_REGS_H_
 
-#define IMX_USB_CORE_BASE 0x02184000
-
-#define USB_UOG_ID           (IMX_USB_CORE_BASE + 0x000)
+#define  USB_UOG_ID          (IMX_USB_CORE_BASE + 0x000)
 # define USB_UOG_ID_REV_OFFT 16
 # define USB_UOG_ID_REV_MASK 0xff
 # define USB_UOG_ID_NID_OFFT 8
