@@ -23,9 +23,32 @@
 
 EMBOX_UNIT_INIT(imx_usb_init);
 
-#define IMX_USB_CORE_BASE OPTION_GET(NUMBER, base_addr)
+#define IMX_USB_CORE_BASE     OPTION_GET(NUMBER, base_addr)
+#define EHCI_MXC_HC_QUANTITY  OPTION_GET(NUMBER, hc_quantity)
 
-#define USB_PORT 0
+struct ehci_mxc_usbphy {
+	int phy_num;
+	uintptr_t base;
+};
+
+struct ehci_mxc_hc {
+	uintptr_t base;
+	int irq_num;
+	struct ehci_mxc_usbphy usbphy;
+	struct ehci_hdc *ehci;
+};
+
+static struct ehci_mxc_hc ehci_mxc_hcs[EHCI_MXC_HC_QUANTITY];
+
+static inline uint32_t ehci_mxc_read(struct ehci_mxc_hc *hc, int reg) {
+	return REG32_LOAD(hc->base + reg);
+}
+
+static inline void ehci_mxc_write(struct ehci_mxc_hc *hc, int reg, uint32_t val) {
+	REG32_STORE(hc->base + reg, val);
+}
+
+//#define USB_PORT 1
 #define IMX6_USB0_IRQ       72
 #define IMX6_USB1_IRQ       73
 #define IMX6_USB2_IRQ       74
@@ -34,9 +57,9 @@ EMBOX_UNIT_INIT(imx_usb_init);
 #define IMX6_USB_PHY_UTMI1  77
 
 
-static void imx_usb_phy_enable(int port) {
+static inline void imx_usb_phy_enable(int port) {
 	int tmp;
-
+#if 0
 	printk("trace %s:%d\n", __func__, __LINE__);
 	/* Stop then Reset */
 	REG32_CLEAR(USB_UOG_USBCMD, USB_USBCMD_RS);
@@ -47,11 +70,12 @@ static void imx_usb_phy_enable(int port) {
 	printk("trace %s:%d\n", __func__, __LINE__);
 
 	REG32_ORIN(USB_UOG_USBCMD, USB_USBCMD_RST);
+
 	printk("trace %s:%d\n", __func__, __LINE__);
 	while (REG32_LOAD(USB_UOG_USBCMD) & USB_USBCMD_RST) {
 	}
 	printk("trace %s:%d\n", __func__, __LINE__);
-
+#endif
 	REG32_STORE(USBPHY_CTRL_SET(port), USBPHY_CTRL_SFTRST);
 	printk("trace %s:%d\n", __func__, __LINE__);
 	tmp = 0xffff;
@@ -73,7 +97,7 @@ static void imx_usb_phy_enable(int port) {
 	printk("trace %s:%d\n", __func__, __LINE__);
 }
 
-static void imx_usb_powerup(int port) {
+static inline void imx_usb_powerup(int port) {
 	REG32_STORE(USBPHY_CTRL_SET(port), USBPHY_CTRL_CLKGATE);
 
 	REG32_STORE(USB_ANALOG_CHRG_DETECT(port),
@@ -82,43 +106,24 @@ static void imx_usb_powerup(int port) {
 	ccm_analog_usb_init(port);
 }
 
-static void ehci_reset(void) {
-	uint32_t cmd = REG32_LOAD(USB_UOG_USBCMD);
+static void ehci_mxc_regdump(struct ehci_mxc_hc *hc) {
+	log_boot("USB_UOG_ID         %08x\n", ehci_mxc_read(hc, USB_UOG_ID));
+	log_boot("USB_UOG_HWGENERAL  %08x\n", ehci_mxc_read(hc, USB_UOG_HWGENERAL));
+	log_boot("USB_UOG_HWHOST     %08x\n", ehci_mxc_read(hc, USB_UOG_HWHOST));
+	log_boot("USB_UOG_HWDEVICE   %08x\n", ehci_mxc_read(hc, USB_UOG_HWDEVICE));
+	log_boot("USB_UOG_HWTXBUF    %08x\n", ehci_mxc_read(hc, USB_UOG_HWTXBUF));
+	log_boot("USB_UOG_HWRXBUF    %08x\n", ehci_mxc_read(hc, USB_UOG_HWRXBUF));
 
-	log_debug("Start reset");
 
-	cmd = (cmd & ~USB_USBCMD_RS) | USB_USBCMD_RST;
-	REG32_STORE(USB_UOG_USBCMD, cmd);
-
-	while (REG32_LOAD(USB_UOG_USBCMD) & USB_USBCMD_RST);
-
-	log_debug("Done");
+	log_boot("========= PHY REGISTERS =========\n");
+	log_boot("USBPHY%d_PWD     %08x\n", hc->usbphy.phy_num, REG32_LOAD(USBPHY_PWD(hc->usbphy.phy_num)));
+	log_boot("USBPHY%d_TX      %08x\n", hc->usbphy.phy_num, REG32_LOAD(USBPHY_TX(hc->usbphy.phy_num)));
+	log_boot("USBPHY%d_RX      %08x\n", hc->usbphy.phy_num, REG32_LOAD(USBPHY_RX(hc->usbphy.phy_num)));
+	log_boot("USBPHY%d_CTRL    %08x\n", hc->usbphy.phy_num, REG32_LOAD(USBPHY_CTRL(hc->usbphy.phy_num)));
+	log_boot("USBPHY%d_STATUS  %08x\n", hc->usbphy.phy_num, REG32_LOAD(USBPHY_STATUS(hc->usbphy.phy_num)));
 }
 
-static void imx_usb_regdump(void) {
-	int i;
-
-	log_boot("USB_UOG_ID         %08x\n", REG32_LOAD(USB_UOG_ID));
-	log_boot("USB_UOG_HWGENERAL  %08x\n", REG32_LOAD(USB_UOG_HWGENERAL));
-	log_boot("USB_UOG_HWHOST     %08x\n", REG32_LOAD(USB_UOG_HWHOST));
-	log_boot("USB_UOG_HWDEVICE   %08x\n", REG32_LOAD(USB_UOG_HWDEVICE));
-	log_boot("USB_UOG_HWTXBUF    %08x\n", REG32_LOAD(USB_UOG_HWTXBUF));
-	log_boot("USB_UOG_HWRXBUF    %08x\n", REG32_LOAD(USB_UOG_HWRXBUF));
-	log_boot("USB_UOG_USBCMD     %08x\n", REG32_LOAD(USB_UOG_USBCMD));
-	log_boot("USB_UOG_USBSTS     %08x\n", REG32_LOAD(USB_UOG_USBSTS));
-	log_boot("USB_UOG_USBINTR    %08x\n", REG32_LOAD(USB_UOG_USBINTR));
-
-	log_boot("========= PHY REGISTERS =========");
-	for (i = 0; i < 2; i++) {
-		log_boot("USBPHY%d_PWD     %08x\n", i + 1, REG32_LOAD(USBPHY_PWD(i)));
-		log_boot("USBPHY%d_TX      %08x\n", i + 1, REG32_LOAD(USBPHY_TX(i)));
-		log_boot("USBPHY%d_RX      %08x\n", i + 1, REG32_LOAD(USBPHY_RX(i)));
-		log_boot("USBPHY%d_CTRL    %08x\n", i + 1, REG32_LOAD(USBPHY_CTRL(i)));
-		log_boot("USBPHY%d_STATUS  %08x\n", i + 1, REG32_LOAD(USBPHY_STATUS(i)));
-	}
-}
-
-static irq_return_t imx6_irq(unsigned int irq_nr, void *data) {
+static inline irq_return_t imx6_irq(unsigned int irq_nr, void *data) {
 	log_debug("IRQ%d enter", irq_nr);
 
 	return IRQ_HANDLED;
@@ -167,108 +172,50 @@ static int ehci_start(struct usb_hcd *hcd) {
 
 	return 0;
 }
-
-static int ehci_stop(struct usb_hcd *hcd) {
-	return 0;
-}
-
-//static void *ehci_hcd_alloc(struct usb_hcd *hcd, void *arg) {
-//	return NULL;
-//}
-
-static void ehci_hcd_free(struct usb_hcd *hcd, void *hci) {
-}
-
-static int ehci_rh_ctrl(struct usb_hub_port *port, enum usb_hub_request req,
-			unsigned short value) {
-	return 0;
-}
-
-static int ehci_request(struct usb_request *req) {
-	return 0;
-}
 #endif
 
-static int imx_usb_init(void) {
-	uint32_t uog_id = REG32_LOAD(USB_UOG_ID);
-	uint32_t phy_version = REG32_LOAD(USBPHY_VERSION(0));
-	uint32_t digprog = REG32_LOAD(USB_ANALOG_DIGPROG);
+static inline int ehci_mxc_init(struct ehci_mxc_hc *hc) {
+	uint32_t uog_id;
 
-	log_boot_start();
+	uog_id = ehci_mxc_read(hc, USB_UOG_ID);
 	log_boot("USB 2.0 high-Speed code rev 0x%02x NID 0x%02x ID 0x%02x\n",
 		(uog_id >> USB_UOG_ID_REV_OFFT) & USB_UOG_ID_REV_MASK,
 		(uog_id >> USB_UOG_ID_NID_OFFT) & USB_UOG_ID_NID_MASK,
 		(uog_id >> USB_UOG_ID_ID_OFFT) & USB_UOG_ID_ID_MASK);
-	log_boot("USB PHY %d.%d\n",
-			phy_version >> 24,
-			((phy_version) >> 16) & 0xFF);
-	log_boot("USB analog rev x.%d\n", digprog & 0xFF);
 
-	imx_usb_regdump();
+	ehci_mxc_regdump(hc);
 
-	log_boot_stop();
+	return 0;
+}
+
+static int imx_usb_init(void) {
+	int i;
 
 	clk_enable("usboh3");
 
-	imx_usb_phy_enable(USB_PORT);
+	log_boot_start();
 
-	/* Setup IOMUX */
+	for (i = 0; i < EHCI_MXC_HC_QUANTITY; i ++) {
+		ehci_mxc_hcs[i].base = IMX_USB_CORE_BASE + 0x200 * i;
+		ehci_mxc_hcs[i].irq_num = IMX6_USB0_IRQ + i;
+		ehci_mxc_hcs[i].ehci = NULL;
+		ehci_mxc_hcs[i].usbphy.base = USBPHY_BASE(i);
+		ehci_mxc_hcs[i].usbphy.phy_num = i;
 
-	imx_usb_powerup(USB_PORT);
+		imx_usb_phy_enable(i);
+		imx_usb_powerup(i);
 
-	/* USB phy config as host */
+		ehci_mxc_init(&ehci_mxc_hcs[i]);
+
+		ehci_hcd_register((void *) (ehci_mxc_hcs[i].base + 0x100), ehci_mxc_hcs[i].irq_num);
+	}
+
+	log_boot_stop();
+
 
 	/* Configure GPIO pins */
 
-	ehci_reset();
-
-	/* Init qh list */
-
-	/* Init periodic list */
-
-	imx_usb_regdump();
-	/* Write '11' to USBMODE */
-
-	int ret;
-	ret = irq_attach(IMX6_USB0_IRQ, imx6_irq, 0, NULL, "i.MX6 USB PORT0");
-	if (0 != ret) {
-		return ret;
-	}
-
-	ret = irq_attach(IMX6_USB1_IRQ, imx6_irq, 0, NULL, "i.MX6 USB PORT1");
-	if (0 != ret) {
-		return ret;
-	}
-
-	ret = irq_attach(IMX6_USB2_IRQ, imx6_irq, 0, NULL, "i.MX6 USB PORT2");
-	if (0 != ret) {
-		return ret;
-	}
-
-	ret = irq_attach(IMX6_USB_OTG_IRQ, imx6_irq, 0, NULL, "i.MX6 USB OTG");
-	if (0 != ret) {
-		return ret;
-	}
-
-	ret = irq_attach(IMX6_USB_PHY_UTMI0, imx6_irq, 0, NULL, "i.MX6 USB PHY UTMI0");
-	if (0 != ret) {
-		return ret;
-	}
-
-	ret = irq_attach(IMX6_USB_PHY_UTMI1, imx6_irq, 0, NULL, "i.MX6 USB PHY UTMI1");
-	if (0 != ret) {
-		return ret;
-	}
-
-	uint32_t cmd = REG32_LOAD(USB_UOG_USBCMD);
-	REG32_STORE(USB_UOG_USBCMD, cmd);
-
-	while (REG32_LOAD(USB_UOG_USBCMD) & USB_USBCMD_RST);
-
-	/* Make sure all structures don't cross 4kb-border! */
-	return ehci_hcd_register((void *) (IMX_USB_CORE_BASE + 0x100) + 0x00, 75);
-
-	//ehci_start(NULL);
+	return 0;
 }
 
 PERIPH_MEMORY_DEFINE(imx_usb, IMX_USB_CORE_BASE, 0x7B0);

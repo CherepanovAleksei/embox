@@ -9,7 +9,8 @@
 #ifndef IMX_USB_REGS_H_
 #define IMX_USB_REGS_H_
 
-#define  USB_UOG_ID          (IMX_USB_CORE_BASE + 0x000)
+
+#define  USB_UOG_ID          (0x000)
 # define USB_UOG_ID_REV_OFFT 16
 # define USB_UOG_ID_REV_MASK 0xff
 # define USB_UOG_ID_NID_OFFT 8
@@ -17,30 +18,12 @@
 # define USB_UOG_ID_ID_OFFT  0
 # define USB_UOG_ID_ID_MASK  0x3f
 
-#define USB_UOG_HWGENERAL    (IMX_USB_CORE_BASE + 0x004)
-#define USB_UOG_HWHOST       (IMX_USB_CORE_BASE + 0x008)
-#define USB_UOG_HWDEVICE     (IMX_USB_CORE_BASE + 0x00C)
-#define USB_UOG_HWTXBUF      (IMX_USB_CORE_BASE + 0x010)
-#define USB_UOG_HWRXBUF      (IMX_USB_CORE_BASE + 0x014)
+#define USB_UOG_HWGENERAL    (0x004)
+#define USB_UOG_HWHOST       (0x008)
+#define USB_UOG_HWDEVICE     (0x00C)
+#define USB_UOG_HWTXBUF      (0x010)
+#define USB_UOG_HWRXBUF      (0x014)
 
-#define USB_UOG_USBCMD       (IMX_USB_CORE_BASE + 0x140)
-# define USB_USBCMD_RS       (1 << 0)
-# define USB_USBCMD_RST      (1 << 1)
-# define USB_USBCMD_PSE      (1 << 4)
-# define USB_USBCMD_ASE      (1 << 5)
-# define USB_USBCMD_IAA      (1 << 6)
-# define USB_USBCMD_ASPE     (1 << 11)
-# define USB_USBCMD_ATDTW    (1 << 12)
-# define USB_USBCMD_SUTW     (1 << 13)
-
-#define USB_USBCMD_FS_MASK   ((3 << 2) | (1 << 15))
-
-#define USB_USBCMD_ITC(x)    ((x) << 16)
-#define USB_USBCMD_ITC_MASK  (0xFF << 16)
-
-
-#define USB_UOG_USBSTS       (IMX_USB_CORE_BASE + 0x144)
-#define USB_UOG_USBINTR      (IMX_USB_CORE_BASE + 0x148)
 
 #define USB_UOG_USBMODE      (IMX_USB_CORE_BASE + 0x1A8)
 
@@ -128,4 +111,5 @@
 #define USBPHY_DEBUG1_CLR(port)    (USBPHY_BASE(port) + 0x78)
 #define USBPHY_DEBUG1_TOG(port)    (USBPHY_BASE(port) + 0x7C)
 #define USBPHY_VERSION(port)       (USBPHY_BASE(port) + 0x80)
+
 #endif /* IMX_USB_REGS_H_ */
