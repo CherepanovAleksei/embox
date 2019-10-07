@@ -58,7 +58,7 @@ static const struct clk gate_repo[] = {
 	{ 0x60,  1 << 3, "l4_sp_clk" },
 	{ 0x60,  1 << 8, "cfg_clk" },
 
-	{ 0x40,  1 << 1, "main_pll_clk" }, +
+	{ 0x40,  1 << 1, "main_pll_clk" },
 	{ 0x80,  1 << 1, "periph_pll_clk" },
 
 	{ 0x60,  1 << 9, "h2f_user0_clk" },
@@ -94,8 +94,8 @@ int clk_enable(char *clk_name) {
 	int i;
 	log_debug("%s", clk_name);
 	for (i = 0; i < ARRAY_SIZE(gate_repo); i ++) {
-		if (0 == strcmp(clks_repo[i].clk_name, clk_name)) {
-			REG32_ORIN(clks_repo[i].reg_offset, clks_repo[i].bit_num);
+		if (0 == strcmp(gate_repo[i].clk_name, clk_name)) {
+			REG32_ORIN(gate_repo[i].reg_offset, gate_repo[i].bit_num);
 			return i;
 		}
 	}
@@ -107,8 +107,8 @@ int clk_disable(char *clk_name) {
 	int i;
 	log_debug("%s", clk_name);
 	for (i = 0; i < ARRAY_SIZE(gate_repo); i ++) {
-		if (0 == strcmp(clks_repo[i].clk_name, clk_name)) {
-			REG32_CLEAR(clks_repo[i].reg_offset, clks_repo[i].bit_num);
+		if (0 == strcmp(gate_repo[i].clk_name, clk_name)) {
+			REG32_CLEAR(gate_repo[i].reg_offset, gate_repo[i].bit_num);
 			return i;
 		}
 	}
