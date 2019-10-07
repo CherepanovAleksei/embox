@@ -1,17 +1,19 @@
 /**
- * @file dw_mmc.c
+ * @file
  * @brief i.MX6 uSDHC driver for MMC card
  * @author Denis Deryugin <deryugin.denis@gmail.com>
  * @version
  * @date 01.05.2017
  */
+#include <util/log.h>
+
+#include <string.h>
 
 #include <drivers/block_dev.h>
 #include <drivers/common/memory.h>
-#include <framework/mod/options.h>
 #include <hal/reg.h>
-#include <string.h>
-#include <util/log.h>
+
+#include <framework/mod/options.h>
 
 #define BASE_ADDR OPTION_GET(NUMBER, base_addr)
 
