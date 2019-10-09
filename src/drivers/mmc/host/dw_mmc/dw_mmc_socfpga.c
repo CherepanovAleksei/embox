@@ -30,10 +30,20 @@ EMBOX_UNIT_INIT(dw_mmc_sockfpga_init);
 
 #define BASE_ADDR OPTION_GET(NUMBER, base_addr)
 
+/* Common flag combinations */
+#define DW_MCI_DATA_ERROR_FLAGS (SDMMC_INT_DRTO | SDMMC_INT_DCRC | \
+				SDMMC_INT_HTO | SDMMC_INT_SBE  | \
+				SDMMC_INT_EBE | SDMMC_INT_HLE)
+
+#define DW_MCI_CMD_ERROR_FLAGS (SDMMC_INT_RTO | SDMMC_INT_RCRC | \
+				SDMMC_INT_RESP_ERR | SDMMC_INT_HLE)
+
+#define DW_MCI_ERROR_FLAGS (DW_MCI_DATA_ERROR_FLAGS | DW_MCI_CMD_ERROR_FLAGS)
+
 #define IDMAC_INT_CLR (SDMMC_IDMAC_INT_AI | SDMMC_IDMAC_INT_NI | \
-		SDMMC_IDMAC_INT_CES | SDMMC_IDMAC_INT_DU | \
-		SDMMC_IDMAC_INT_FBE | SDMMC_IDMAC_INT_RI | \
-		SDMMC_IDMAC_INT_TI)
+				SDMMC_IDMAC_INT_CES | SDMMC_IDMAC_INT_DU | \
+				SDMMC_IDMAC_INT_FBE | SDMMC_IDMAC_INT_RI | \
+				SDMMC_IDMAC_INT_TI)
 
 #define DESC_RING_BUF_SZ PAGE_SIZE()
 
@@ -553,7 +563,7 @@ int dw_mci_probe(struct dw_mci *host) {
 	 * receive ready and error such as transmit, receive timeout, crc error
 	 */
 	mci_writel(host, INTMASK, SDMMC_INT_CMD_DONE | SDMMC_INT_DATA_OVER |
-			SDMMC_INT_TXDR | SDMMC_INT_RXDR /*| DW_MCI_ERROR_FLAGS*/);
+			SDMMC_INT_TXDR | SDMMC_INT_RXDR | DW_MCI_ERROR_FLAGS);
 	/* Enable mci interrupt */
 	mci_writel(host, CTRL, SDMMC_CTRL_INT_ENABLE);
 
