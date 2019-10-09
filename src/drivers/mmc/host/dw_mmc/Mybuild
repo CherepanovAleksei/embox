@@ -9,4 +9,5 @@ module dw_mmc_socfpga {
 
 	depends embox.driver.block_common
 	depends embox.driver.clk.socfpga
+	depends embox.driver.mmc.mmc_core
 }

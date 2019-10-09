@@ -191,10 +191,29 @@ enum {
 	TRANS_MODE_EDMAC
 };
 
+struct dw_mci;
+/* DMA ops for Internal/External DMAC interface */
+struct dw_mci_dma_ops {
+	/* DMA Ops */
+	int (*init)(struct dw_mci *host);
+	int (*start)(struct dw_mci *host, unsigned int sg_len);
+	void (*complete)(void *host);
+	void (*stop)(struct dw_mci *host);
+	void (*cleanup)(struct dw_mci *host);
+	void (*exit)(struct dw_mci *host);
+};
+
+struct mmc_request;
+struct mmc_command;
+struct mmc_data;
 struct dw_mci {
 	uintptr_t *regs;
 	uintptr_t *fifo_reg;
 	int irq;
+
+	struct mmc_request *mrq;
+	struct mmc_command *cmd;
+	struct mmc_data    *data;
 
 	uint32_t fifoth_val;
 	uint16_t verid;
@@ -203,6 +222,12 @@ struct dw_mci {
 	int use_dma;
 	int using_dma;
 	int dma_64bit_address;
+
+	uintptr_t sg_dma;
+	void *sg_cpu;
+	const struct dw_mci_dma_ops *dma_ops;
+	/* For idmac */
+	unsigned int ring_size;
 
 	/* FIFO push and pull */
 	int fifo_depth;

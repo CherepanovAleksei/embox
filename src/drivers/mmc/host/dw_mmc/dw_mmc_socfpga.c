@@ -16,6 +16,11 @@
 #include <hal/clock.h>
 #include <kernel/time/time.h>
 #include <drivers/common/memory.h>
+#include <asm-generic/dma-mapping.h>
+
+#include <linux/byteorder.h>
+
+#include <drivers/mmc/mmc_core.h>
 
 #include "dw_mmc.h"
 
@@ -24,6 +29,52 @@
 EMBOX_UNIT_INIT(dw_mmc_sockfpga_init);
 
 #define BASE_ADDR OPTION_GET(NUMBER, base_addr)
+
+#define IDMAC_INT_CLR (SDMMC_IDMAC_INT_AI | SDMMC_IDMAC_INT_NI | \
+		SDMMC_IDMAC_INT_CES | SDMMC_IDMAC_INT_DU | \
+		SDMMC_IDMAC_INT_FBE | SDMMC_IDMAC_INT_RI | \
+		SDMMC_IDMAC_INT_TI)
+
+#define DESC_RING_BUF_SZ PAGE_SIZE()
+
+struct idmac_desc_64addr {
+	uint32_t des0; /* Control Descriptor */
+
+	uint32_t des1;	/* Reserved */
+
+	uint32_t des2;	/*Buffer sizes */
+#define IDMAC_64ADDR_SET_BUFFER1_SIZE(d, s) \
+	((d)->des2 = ((d)->des2 & cpu_to_le32(0x03ffe000)) | \
+	 ((cpu_to_le32(s)) & cpu_to_le32(0x1fff)))
+
+	uint32_t des3;	/* Reserved */
+
+	uint32_t des4;	/* Lower 32-bits of Buffer Address Pointer 1*/
+	uint32_t des5;	/* Upper 32-bits of Buffer Address Pointer 1*/
+
+	uint32_t des6;	/* Lower 32-bits of Next Descriptor Address */
+	uint32_t des7;	/* Upper 32-bits of Next Descriptor Address */
+};
+
+struct idmac_desc {
+	uint32_t des0;	/* Control Descriptor */
+#define IDMAC_DES0_DIC	BIT(1)
+#define IDMAC_DES0_LD	BIT(2)
+#define IDMAC_DES0_FD	BIT(3)
+#define IDMAC_DES0_CH	BIT(4)
+#define IDMAC_DES0_ER	BIT(5)
+#define IDMAC_DES0_CES	BIT(30)
+#define IDMAC_DES0_OWN	BIT(31)
+
+	uint32_t des1;	/* Buffer sizes */
+#define IDMAC_SET_BUFFER1_SIZE(d, s) \
+	((d)->des1 = ((d)->des1 & cpu_to_le32(0x03ffe000)) | (cpu_to_le32((s) & 0x1fff)))
+
+	uint32_t des2;	/* buffer 1 physical address */
+
+	uint32_t des3;	/* buffer 2 physical address */
+};
+
 
 static bool dw_mci_ctrl_reset(struct dw_mci *host, uint32_t reset) {
 	uint32_t ctrl;
@@ -118,6 +169,213 @@ static inline void dw_mci_read_data_pio(struct dw_mci *host, bool dto) {
 static inline void dw_mci_write_data_pio(struct dw_mci *host) {
 }
 
+
+/* DMA interface functions */
+static inline void dw_mci_stop_dma(struct dw_mci *host) {
+	if (host->using_dma) {
+		host->dma_ops->stop(host);
+		host->dma_ops->cleanup(host);
+	}
+
+	/* Data transfer was stopped by the interrupt handler */
+//	set_bit(EVENT_XFER_COMPLETE, &host->pending_events);
+}
+
+static inline int dw_mci_get_dma_dir(struct mmc_data *data) {
+	if (data->flags & MMC_DATA_WRITE) {
+		return DMA_TO_DEVICE;
+	} else {
+		return DMA_FROM_DEVICE;
+	}
+}
+
+static void dw_mci_dma_cleanup(struct dw_mci *host) {
+	struct mmc_data *data = host->data;
+
+	if (data) {
+#if 0
+		if (!data->host_cookie) {
+			dma_unmap_sg(host->dev, data->sg, data->sg_len,
+					dw_mci_get_dma_dir(data));
+		}
+#endif
+	}
+}
+
+static void dw_mci_idmac_reset(struct dw_mci *host) {
+	uint32_t bmod = mci_readl(host, BMOD);
+	/* Software reset of DMA */
+	bmod |= SDMMC_IDMAC_SWRESET;
+	mci_writel(host, BMOD, bmod);
+}
+
+static void dw_mci_idmac_stop_dma(struct dw_mci *host) {
+	uint32_t temp;
+
+	/* Disable and reset the IDMAC interface */
+	temp = mci_readl(host, CTRL);
+	temp &= ~SDMMC_CTRL_USE_IDMAC;
+	temp |= SDMMC_CTRL_DMA_RESET;
+	mci_writel(host, CTRL, temp);
+
+	/* Stop the IDMAC running */
+	temp = mci_readl(host, BMOD);
+	temp &= ~(SDMMC_IDMAC_ENABLE | SDMMC_IDMAC_FB);
+	temp |= SDMMC_IDMAC_SWRESET;
+	mci_writel(host, BMOD, temp);
+}
+
+static void dw_mci_dmac_complete_dma(void *arg) {
+	struct dw_mci *host = arg;
+	struct mmc_data *data = host->data;
+
+	log_debug("DMA complete");
+
+	if ((host->use_dma == TRANS_MODE_EDMAC) &&
+	    data && (data->flags & MMC_DATA_READ)) {
+		log_error("TRANS_MODE_EDMAC not support");
+#if 0
+		/* Invalidate cache after read */
+		dma_sync_sg_for_cpu(mmc_dev(host->cur_slot->mmc),
+				    data->sg,
+				    data->sg_len,
+				    DMA_FROM_DEVICE);
+#endif
+	}
+
+	host->dma_ops->cleanup(host);
+
+	/*
+	 * If the card was removed, data will be NULL. No point in trying to
+	 * send the stop command or waiting for NBUSY in this case.
+	 */
+	if (data) {
+#if 0
+		set_bit(EVENT_XFER_COMPLETE, &host->pending_events);
+		tasklet_schedule(&host->tasklet);
+#endif
+	}
+}
+
+
+static int dw_mci_idmac_init(struct dw_mci *host) {
+	int i;
+
+	if (host->dma_64bit_address == 1) {
+		struct idmac_desc_64addr *p;
+		/* Number of descriptors in the ring buffer */
+		host->ring_size =
+			DESC_RING_BUF_SZ / sizeof(struct idmac_desc_64addr);
+
+		/* Forward link the descriptor list */
+		for (i = 0, p = host->sg_cpu; i < host->ring_size - 1; i++, p++) {
+			p->des6 = (host->sg_dma +
+					(sizeof(struct idmac_desc_64addr) * (i + 1))) & 0xffffffff;
+
+			p->des7 = (uint64_t)(host->sg_dma +
+					(sizeof(struct idmac_desc_64addr) * (i + 1))) >> 32;
+			/* Initialize reserved and buffer size fields to "0" */
+			p->des1 = 0;
+			p->des2 = 0;
+			p->des3 = 0;
+		}
+
+		/* Set the last descriptor as the end-of-ring descriptor */
+		p->des6 = host->sg_dma & 0xffffffff;
+		p->des7 = (uint64_t)host->sg_dma >> 32;
+		p->des0 = IDMAC_DES0_ER;
+
+	} else {
+		struct idmac_desc *p;
+		/* Number of descriptors in the ring buffer */
+		host->ring_size =
+			DESC_RING_BUF_SZ / sizeof(struct idmac_desc);
+
+		/* Forward link the descriptor list */
+		for (i = 0, p = host->sg_cpu; i < host->ring_size - 1; i++, p++) {
+			p->des3 = cpu_to_le32(host->sg_dma +
+					(sizeof(struct idmac_desc) * (i + 1)));
+			p->des1 = 0;
+		}
+
+		/* Set the last descriptor as the end-of-ring descriptor */
+		p->des3 = cpu_to_le32(host->sg_dma);
+		p->des0 = cpu_to_le32(IDMAC_DES0_ER);
+	}
+
+	dw_mci_idmac_reset(host);
+
+	if (host->dma_64bit_address == 1) {
+		/* Mask out interrupts - get Tx & Rx complete only */
+		mci_writel(host, IDSTS64, IDMAC_INT_CLR);
+		mci_writel(host, IDINTEN64, SDMMC_IDMAC_INT_NI |
+				SDMMC_IDMAC_INT_RI | SDMMC_IDMAC_INT_TI);
+
+		/* Set the descriptor base address */
+		mci_writel(host, DBADDRL, host->sg_dma & 0xffffffff);
+		mci_writel(host, DBADDRU, (uint64_t)host->sg_dma >> 32);
+
+	} else {
+		/* Mask out interrupts - get Tx & Rx complete only */
+		mci_writel(host, IDSTS, IDMAC_INT_CLR);
+		mci_writel(host, IDINTEN, SDMMC_IDMAC_INT_NI |
+				SDMMC_IDMAC_INT_RI | SDMMC_IDMAC_INT_TI);
+
+		/* Set the descriptor base address */
+		mci_writel(host, DBADDR, host->sg_dma);
+	}
+
+	return 0;
+}
+
+static int dw_mci_idmac_start_dma(struct dw_mci *host, unsigned int sg_len) {
+	uint32_t temp;
+	int ret = 0;
+
+#if 0
+	if (host->dma_64bit_address == 1)
+		ret = dw_mci_prepare_desc64(host, host->data, sg_len);
+	else
+		ret = dw_mci_prepare_desc32(host, host->data, sg_len);
+
+	if (ret)
+		goto out;
+#endif
+	/* drain writebuffer */
+	//wmb();
+
+	/* Make sure to reset DMA in case we did PIO before this */
+	dw_mci_ctrl_reset(host, SDMMC_CTRL_DMA_RESET);
+	dw_mci_idmac_reset(host);
+
+	/* Select IDMAC interface */
+	temp = mci_readl(host, CTRL);
+	temp |= SDMMC_CTRL_USE_IDMAC;
+	mci_writel(host, CTRL, temp);
+
+	/* drain writebuffer */
+	//wmb();
+
+	/* Enable the IDMAC */
+	temp = mci_readl(host, BMOD);
+	temp |= SDMMC_IDMAC_ENABLE | SDMMC_IDMAC_FB;
+	mci_writel(host, BMOD, temp);
+
+	/* Start it running */
+	mci_writel(host, PLDMND, 1);
+
+//out:
+	return ret;
+}
+
+static const struct dw_mci_dma_ops dw_mci_idmac_ops = {
+	.init = dw_mci_idmac_init,
+	.start = dw_mci_idmac_start_dma,
+	.stop = dw_mci_idmac_stop_dma,
+	.complete = dw_mci_dmac_complete_dma,
+	.cleanup = dw_mci_dma_cleanup,
+};
+
 static void dw_mci_init_dma(struct dw_mci *host) {
 	int addr_config;
 
@@ -164,20 +422,18 @@ static void dw_mci_init_dma(struct dw_mci *host) {
 			host->dma_64bit_address = 0;
 			log_info("IDMAC supports 32-bit address mode.");
 		}
-#if 0
+
 		/* Alloc memory for sg translation */
-		host->sg_cpu = dmam_alloc_coherent(host->dev,
+		host->sg_cpu = dma_alloc_coherent(NULL,
 						   DESC_RING_BUF_SZ,
-						   &host->sg_dma, GFP_KERNEL);
+						   &host->sg_dma, 0);
 		if (!host->sg_cpu) {
-			dev_err(host->dev,
-				"%s: could not alloc DMA memory\n",
-				__func__);
+			log_error("could not alloc DMA memory");
 			goto no_dma;
 		}
 
 		host->dma_ops = &dw_mci_idmac_ops;
-#endif
+
 		log_info("Using internal DMA controller.");
 	} else {
 #if 0
@@ -191,19 +447,18 @@ static void dw_mci_init_dma(struct dw_mci *host) {
 #endif
 		log_info("Using external DMA controller.");
 	}
-#if 0
+
 	if (host->dma_ops->init && host->dma_ops->start &&
 	    host->dma_ops->stop && host->dma_ops->cleanup) {
 		if (host->dma_ops->init(host)) {
-			dev_err(host->dev, "%s: Unable to initialize DMA Controller.\n",
-				__func__);
+			log_error("Unable to initialize DMA Controller.");
 			goto no_dma;
 		}
 	} else {
-		dev_err(host->dev, "DMA initialization not found.\n");
+		log_error("DMA initialization not found.");
 		goto no_dma;
 	}
-#endif
+
 	return;
 
 no_dma:
