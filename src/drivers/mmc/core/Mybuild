@@ -1,0 +1,6 @@
+package embox.driver.mmc
+
+module mmc_core {
+	@IncludeExport(path="drivers/mmc")
+	source "mmc_core.h"
+}
