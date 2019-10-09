@@ -15,6 +15,7 @@
 
 #include <hal/clock.h>
 #include <kernel/time/time.h>
+#include <drivers/common/memory.h>
 
 #include "dw_mmc.h"
 
@@ -25,8 +26,10 @@ EMBOX_UNIT_INIT(dw_mmc_sockfpga_init);
 #define BASE_ADDR OPTION_GET(NUMBER, base_addr)
 
 static bool dw_mci_ctrl_reset(struct dw_mci *host, uint32_t reset) {
-	unsigned long timeout = clock_sys_ticks() + ms2jiffies(1000);
 	uint32_t ctrl;
+	unsigned long timeout;
+
+	timeout = clock_sys_ticks() + ms2jiffies(1000);
 
 	ctrl = mci_readl(host, CTRL);
 	ctrl |= reset;
@@ -261,18 +264,15 @@ int dw_mci_probe(struct dw_mci *host) {
 	 * FIFO threshold settings  RxMark  = fifo_size / 2 - 1,
 	 *                          Tx Mark = fifo_size / 2 DMA Size = 8
 	 */
-//	if (!host->pdata->fifo_depth) {
-		/*
-		 * Power-on value of RX_WMark is FIFO_DEPTH-1, but this may
-		 * have been overwritten by the bootloader, just like we're
-		 * about to do, so if you know the value for your hardware, you
-		 * should put it in the platform data.
-		 */
-		fifo_size = mci_readl(host, FIFOTH);
-		fifo_size = 1 + ((fifo_size >> 16) & 0xfff);
-//	} else {
-//		fifo_size = host->pdata->fifo_depth;
-//	}
+	/*
+	 * Power-on value of RX_WMark is FIFO_DEPTH-1, but this may
+	 * have been overwritten by the bootloader, just like we're
+	 * about to do, so if you know the value for your hardware, you
+	 * should put it in the platform data.
+	 */
+	fifo_size = mci_readl(host, FIFOTH);
+	fifo_size = 1 + ((fifo_size >> 16) & 0xfff);
+
 	host->fifo_depth = fifo_size;
 	host->fifoth_val = SDMMC_SET_FIFOTH(0x2, fifo_size / 2 - 1, fifo_size / 2);
 	mci_writel(host, FIFOTH, host->fifoth_val);
@@ -313,3 +313,5 @@ static int dw_mmc_sockfpga_init(void) {
 	dw_mci_probe(&dw_mci);
 	return 0;
 }
+
+PERIPH_MEMORY_DEFINE(dw_mmc, BASE_ADDR, 0x4000);

@@ -1,12 +1,12 @@
 package embox.driver.mmc.host
 
-module dw_mmc_sockfpga {
+module dw_mmc_socfpga {
+	option number log_level=1
+
 	option number base_addr
-	
-	option number log_level=0
-	
-	source "dw_mmc.c"
-	
+
+	source "dw_mmc_socfpga.c"
+
 	depends embox.driver.block_common
 	depends embox.driver.clk.socfpga
 }
